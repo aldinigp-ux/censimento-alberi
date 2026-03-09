@@ -17,7 +17,7 @@ if not os.path.exists(CARTELLA_FOTO):
 conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
 st.title("🌳 Registro Alberi di Al-din")
 
-# Inizializziamo la memoria se non esiste
+# Memoria di sessione
 if 'last_foto' not in st.session_state:
     st.session_state['last_foto'] = None
 if 'specie_salvata' not in st.session_state:
@@ -31,9 +31,8 @@ if loc is not None and 'coords' in loc:
         st.header("Nuova Rilevazione")
         lat = loc['coords']['latitude']
         lon = loc['coords']['longitude']
-        st.success(f"📍 GPS Pronto")
+        st.success("📍 GPS Pronto")
         
-        # Salviamo il nome nella memoria mentre scrivi
         specie = st.text_input("Specie:", value=st.session_state['specie_salvata'], placeholder="Es: Quercus robur")
         st.session_state['specie_salvata'] = specie
         
@@ -45,58 +44,55 @@ if loc is not None and 'coords' in loc:
             with open(path_foto, "wb") as f:
                 f.write(foto_file.getbuffer())
             st.session_state['last_foto'] = nome_f
-            st.info("Foto acquisita correttamente!")
 
-        # Ora il controllo è più robusto
         if st.button("🚀 Registra e Salva Online"):
-            nome_da_salvare = st.session_state['specie_salvata']
-            foto_da_salvare = st.session_state['last_foto']
-            
-            if nome_da_salvare and foto_da_salvare:
+            if st.session_state['specie_salvata'] and st.session_state['last_foto']:
                 try:
-                    # Leggiamo e puliamo
-                    df_esistente = conn.read(spreadsheet=URL_FOGLIO).dropna(how='all')
+                    # --- LA SOLUZIONE DEFINITIVA ---
+                    # Invece di update(), usiamo la connessione diretta per fare un append
+                    nuovi_dati = [
+                        st.session_state['specie_salvata'], 
+                        lat, 
+                        lon, 
+                        st.session_state['last_foto']
+                    ]
                     
-                    nuova_riga = pd.DataFrame([{
-                        "Specie": nome_da_salvare, 
-                        "latitude": lat, 
-                        "longitude": lon, 
-                        "Foto_URL": foto_da_salvare
-                    }])
+                    # Accediamo al foglio tramite il client interno (metodo infallibile)
+                    client = conn._instance
+                    sheet = client.open_by_url(URL_FOGLIO).sheet1
                     
-                    df_finale = pd.concat([df_esistente, nuova_riga], ignore_index=True)
-                    conn.update(spreadsheet=URL_FOGLIO, data=df_finale)
+                    # Questo comando aggiunge SEMPRE una riga in fondo
+                    sheet.append_row(nuovi_dati)
                     
-                    # Puliamo la memoria dopo il successo
+                    # Pulizia memoria
                     st.session_state['last_foto'] = None
                     st.session_state['specie_salvata'] = ""
                     
                     st.balloons()
-                    st.success(f"Salvato con successo!")
+                    st.success("Salvato correttamente in coda!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Errore tecnico: {e}")
+                    st.error(f"Errore: {e}")
             else:
-                st.warning("⚠️ Assicurati di aver scritto il nome E scattato la foto!")
+                st.warning("⚠️ Manca il nome o la foto!")
 else:
     st.warning("Ricerca GPS in corso...")
 
 # --- VISUALIZZAZIONE DATI ---
 st.divider()
 try:
+    # Leggiamo i dati per la mappa e la lista
     df = conn.read(spreadsheet=URL_FOGLIO).dropna(how='all')
     if not df.empty:
         st.subheader("Mappa dei ritrovamenti")
         st.map(df)
         
-        st.subheader("Archivio Storico")
-        # Invertiamo l'ordine per vedere gli ultimi inseriti in alto
+        st.subheader("Archivio")
         for i, row in df.iloc[::-1].iterrows():
             with st.expander(f"🌳 {row['Specie']}"):
                 path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
                 if os.path.exists(path_img):
-                    st.image(path_img, width=300)
-                st.write(f"Data: {row['Foto_URL'].split('_')[1] if '_' in row['Foto_URL'] else ''}")
+                    st.image(path_img, width=250)
                 st.write(f"Posizione: {row['latitude']}, {row['longitude']}")
 except:
-    st.info("Inizia a mappare i tuoi alberi!")
+    st.info("Inizia a mappare!")
