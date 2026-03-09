@@ -7,7 +7,7 @@ from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Erbario Digitale", page_icon="🌳", layout="wide")
 
-URL_FOGLIO = ""
+URL_FOGLIO = "https://docs.google.com/spreadsheets/d/1NP6G6MGH2NTXlEJ8MsR0f5RsLW_oxYZRCpBj6NsUG6w/edit"
 
 CARTELLA_FOTO = "foto_alberi"
 if not os.path.exists(CARTELLA_FOTO):
