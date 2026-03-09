@@ -15,7 +15,13 @@ if not os.path.exists(CARTELLA_FOTO):
     os.makedirs(CARTELLA_FOTO)
 
 conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
-st.title("🌳 Registro Alberi di Haldin")
+st.title("🌳 Registro Alberi di Al-din")
+
+# Inizializziamo la memoria se non esiste
+if 'last_foto' not in st.session_state:
+    st.session_state['last_foto'] = None
+if 'specie_salvata' not in st.session_state:
+    st.session_state['specie_salvata'] = ""
 
 loc = get_geolocation()
 
@@ -27,7 +33,10 @@ if loc is not None and 'coords' in loc:
         lon = loc['coords']['longitude']
         st.success(f"📍 GPS Pronto")
         
-        specie = st.text_input("Specie:", placeholder="Es: Quercus robur")
+        # Salviamo il nome nella memoria mentre scrivi
+        specie = st.text_input("Specie:", value=st.session_state['specie_salvata'], placeholder="Es: Quercus robur")
+        st.session_state['specie_salvata'] = specie
+        
         foto_file = st.camera_input("Scatta una foto")
         
         if foto_file:
@@ -36,39 +45,39 @@ if loc is not None and 'coords' in loc:
             with open(path_foto, "wb") as f:
                 f.write(foto_file.getbuffer())
             st.session_state['last_foto'] = nome_f
-            st.image(foto_file, caption="Anteprima foto", width=150)
+            st.info("Foto acquisita correttamente!")
 
+        # Ora il controllo è più robusto
         if st.button("🚀 Registra e Salva Online"):
-            if specie and 'last_foto' in st.session_state:
+            nome_da_salvare = st.session_state['specie_salvata']
+            foto_da_salvare = st.session_state['last_foto']
+            
+            if nome_da_salvare and foto_da_salvare:
                 try:
-                    # METODO APPEND: Aggiunge in coda senza sovrascrivere
-                    nuovi_dati = pd.DataFrame([{
-                        "Specie": specie, 
+                    # Leggiamo e puliamo
+                    df_esistente = conn.read(spreadsheet=URL_FOGLIO).dropna(how='all')
+                    
+                    nuova_riga = pd.DataFrame([{
+                        "Specie": nome_da_salvare, 
                         "latitude": lat, 
                         "longitude": lon, 
-                        "Foto_URL": st.session_state['last_foto']
+                        "Foto_URL": foto_da_salvare
                     }])
                     
-                    # Leggiamo il foglio esistente
-                    df_esistente = conn.read(spreadsheet=URL_FOGLIO)
-                    
-                    # Uniamo i dati assicurandoci di ignorare righe vuote
-                    if df_esistente is not None:
-                        df_esistente = df_esistente.dropna(how='all')
-                        df_finale = pd.concat([df_esistente, nuovi_dati], ignore_index=True)
-                    else:
-                        df_finale = nuovi_dati
-                    
-                    # Aggiorniamo l'intero foglio con la lista completa
+                    df_finale = pd.concat([df_esistente, nuova_riga], ignore_index=True)
                     conn.update(spreadsheet=URL_FOGLIO, data=df_finale)
                     
+                    # Puliamo la memoria dopo il successo
+                    st.session_state['last_foto'] = None
+                    st.session_state['specie_salvata'] = ""
+                    
                     st.balloons()
-                    st.success(f"Salvato: {specie}")
+                    st.success(f"Salvato con successo!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Errore: {e}")
+                    st.error(f"Errore tecnico: {e}")
             else:
-                st.warning("⚠️ Manca il nome o la foto!")
+                st.warning("⚠️ Assicurati di aver scritto il nome E scattato la foto!")
 else:
     st.warning("Ricerca GPS in corso...")
 
@@ -80,12 +89,14 @@ try:
         st.subheader("Mappa dei ritrovamenti")
         st.map(df)
         
-        st.subheader("Archivio")
-        for i, row in df.iterrows():
+        st.subheader("Archivio Storico")
+        # Invertiamo l'ordine per vedere gli ultimi inseriti in alto
+        for i, row in df.iloc[::-1].iterrows():
             with st.expander(f"🌳 {row['Specie']}"):
                 path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
                 if os.path.exists(path_img):
-                    st.image(path_img, width=200)
-                st.write(f"Coordinate: {row['latitude']}, {row['longitude']}")
+                    st.image(path_img, width=300)
+                st.write(f"Data: {row['Foto_URL'].split('_')[1] if '_' in row['Foto_URL'] else ''}")
+                st.write(f"Posizione: {row['latitude']}, {row['longitude']}")
 except:
     st.info("Inizia a mappare i tuoi alberi!")
