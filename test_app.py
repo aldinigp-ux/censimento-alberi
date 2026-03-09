@@ -33,34 +33,32 @@ if loc is not None and 'coords' in loc:
                 f.write(foto_file.getbuffer())
                 st.session_state['last_foto'] = nome_f
 
-        if st.button("🚀 Registra e Salva Online"):
+if st.button("🚀 Registra e Salva Online"):
             if specie and 'last_foto' in st.session_state:
                 try:
-                    # Legge tutto il foglio senza forzare il nome
-                    df_esistente = conn.read(spreadsheet=URL_FOGLIO)
+                    # 1. Creiamo la riga da aggiungere (una lista di valori)
+                    nuovi_dati = [specie, lat, lon, st.session_state['last_foto']]
                     
-                    # Crea la nuova riga
-                    nuova_riga = pd.DataFrame([{
-                        "Specie": specie,
-                        "latitude": lat,
-                        "longitude": lon,
-                        "Foto_URL": st.session_state['last_foto']
-                    }])
-
-                    # Unisce i dati: se il foglio è vuoto usa solo la nuova riga
-                    if df_esistente is not None and not df_esistente.empty:
-                        # Rimuove eventuali righe completamente vuote che confondono Panda
-                        df_esistente = df_esistente.dropna(how='all')
-                        df_finale = pd.concat([df_esistente, nuova_riga], ignore_index=True)
-                    else:
-                         df_finale = nuova_riga
-
-                    # Sovrascrive tutto con la lista completa
-                    conn.update(spreadsheet=URL_FOGLIO, data=df_finale)
+                    # 2. Usiamo la funzione 'append_row' per aggiungere in coda
+                    # Accediamo direttamente al client gspread sottostante
+                    client = conn._instance
+                    sheet = client.open_by_url(URL_FOGLIO).sheet1
+                    sheet.append_row(nuovi_dati)
+                    
                     st.balloons()
+                    st.success(f"Salvato correttamente: {specie}")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Errore: {e}")
+                    # Se il metodo sopra fallisce, usiamo quello classico ma corretto
+                    try:
+                        df_esistente = conn.read(spreadsheet=URL_FOGLIO).dropna(how='all')
+                        nuova_riga = pd.DataFrame([{"Specie": specie, "latitude": lat, "longitude": lon, "Foto_URL": st.session_state['last_foto']}])
+                        df_finale = pd.concat([df_esistente, nuova_riga], ignore_index=True)
+                        conn.update(spreadsheet=URL_FOGLIO, data=df_finale)
+                        st.balloons()
+                        st.rerun()
+                    except Exception as e2:
+                        st.error(f"Errore tecnico: {e2}")
 else:
     st.warning("Ricerca GPS in corso...")
 
