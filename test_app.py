@@ -36,25 +36,27 @@ if loc is not None and 'coords' in loc:
         if st.button("🚀 Registra e Salva Online"):
             if specie and 'last_foto' in st.session_state:
                 try:
-                    # 1. Legge i dati attuali (specificando il foglio se necessario)
-                    df_esistente = conn.read(spreadsheet=URL_FOGLIO, worksheet="Foglio1")
-
-                    # 2. Crea la nuova riga
+                    # Legge tutto il foglio senza forzare il nome
+                    df_esistente = conn.read(spreadsheet=URL_FOGLIO)
+                    
+                    # Crea la nuova riga
                     nuova_riga = pd.DataFrame([{
-                    "Specie": specie,
-                    "latitude": lat,
-                    "longitude": lon,
-                    "Foto_URL": st.session_state['last_foto']
-}])
+                        "Specie": specie,
+                        "latitude": lat,
+                        "longitude": lon,
+                        "Foto_URL": st.session_state['last_foto']
+                    }])
 
-                    # 3. Unisce i dati vecchi e i nuovi, assicurandosi di non perdere nulla
+                    # Unisce i dati: se il foglio è vuoto usa solo la nuova riga
                     if df_esistente is not None and not df_esistente.empty:
-                         df_finale = pd.concat([df_esistente, nuova_riga], ignore_index=True)
+                        # Rimuove eventuali righe completamente vuote che confondono Panda
+                        df_esistente = df_esistente.dropna(how='all')
+                        df_finale = pd.concat([df_esistente, nuova_riga], ignore_index=True)
                     else:
                          df_finale = nuova_riga
 
-                        # 4. Sovrascrive il foglio con la lista completa e aggiornata
-                         conn.update(spreadsheet=URL_FOGLIO, data=df_finale)
+                    # Sovrascrive tutto con la lista completa
+                    conn.update(spreadsheet=URL_FOGLIO, data=df_finale)
                     st.balloons()
                     st.rerun()
                 except Exception as e:
