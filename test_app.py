@@ -25,7 +25,7 @@ if loc is not None and 'coords' in loc:
         st.header("Nuova Rilevazione")
         lat = loc['coords']['latitude']
         lon = loc['coords']['longitude']
-        st.success(f"📍 GPS Pronto: {lat:.4f}, {lon:.4f}")
+        st.success(f"📍 GPS Pronto")
         
         specie = st.text_input("Specie:", placeholder="Es: Quercus robur")
         foto_file = st.camera_input("Scatta una foto")
@@ -41,51 +41,51 @@ if loc is not None and 'coords' in loc:
         if st.button("🚀 Registra e Salva Online"):
             if specie and 'last_foto' in st.session_state:
                 try:
-                    # Legge i dati esistenti e pulisce le righe vuote
-                    df_esistente = conn.read(spreadsheet=URL_FOGLIO).dropna(how='all')
-                    
-                    # Crea la nuova riga
-                    nuova_riga = pd.DataFrame([{
+                    # METODO APPEND: Aggiunge in coda senza sovrascrivere
+                    nuovi_dati = pd.DataFrame([{
                         "Specie": specie, 
                         "latitude": lat, 
                         "longitude": lon, 
                         "Foto_URL": st.session_state['last_foto']
                     }])
                     
-                    # Unisce i dati (appende in coda)
-                    df_finale = pd.concat([df_esistente, nuova_riga], ignore_index=True)
+                    # Leggiamo il foglio esistente
+                    df_esistente = conn.read(spreadsheet=URL_FOGLIO)
                     
-                    # Aggiorna il foglio Google
+                    # Uniamo i dati assicurandoci di ignorare righe vuote
+                    if df_esistente is not None:
+                        df_esistente = df_esistente.dropna(how='all')
+                        df_finale = pd.concat([df_esistente, nuovi_dati], ignore_index=True)
+                    else:
+                        df_finale = nuovi_dati
+                    
+                    # Aggiorniamo l'intero foglio con la lista completa
                     conn.update(spreadsheet=URL_FOGLIO, data=df_finale)
                     
                     st.balloons()
                     st.success(f"Salvato: {specie}")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Errore durante il salvataggio: {e}")
+                    st.error(f"Errore: {e}")
             else:
-                st.warning("⚠️ Inserisci il nome e scatta una foto prima di salvare!")
+                st.warning("⚠️ Manca il nome o la foto!")
 else:
-    st.warning("Ricerca GPS in corso... Assicurati di aver dato i permessi di posizione al browser.")
+    st.warning("Ricerca GPS in corso...")
 
-# --- VISUALIZZAZIONE DATI (HOME) ---
+# --- VISUALIZZAZIONE DATI ---
 st.divider()
 try:
     df = conn.read(spreadsheet=URL_FOGLIO).dropna(how='all')
     if not df.empty:
-        col_map, col_list = st.columns([0.6, 0.4])
+        st.subheader("Mappa dei ritrovamenti")
+        st.map(df)
         
-        with col_map:
-            st.subheader("Mappa dei ritrovamenti")
-            st.map(df)
-        
-        with col_list:
-            st.subheader("Ultimi inserimenti")
-            for i, row in df.iloc[::-1].iterrows(): # Mostra i più recenti in alto
-                with st.expander(f"🌳 {row['Specie']}"):
-                    path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
-                    if os.path.exists(path_img):
-                        st.image(path_img, width=200)
-                    st.write(f"📍 Lat: {row['latitude']} | Lon: {row['longitude']}")
-except Exception as e:
-    st.info("Nessun dato trovato o errore di caricamento. Inizia a mappare!")
+        st.subheader("Archivio")
+        for i, row in df.iterrows():
+            with st.expander(f"🌳 {row['Specie']}"):
+                path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
+                if os.path.exists(path_img):
+                    st.image(path_img, width=200)
+                st.write(f"Coordinate: {row['latitude']}, {row['longitude']}")
+except:
+    st.info("Inizia a mappare i tuoi alberi!")
