@@ -3,19 +3,26 @@ from streamlit_js_eval import get_geolocation
 import pandas as pd
 import os
 from datetime import datetime
+from streamlit_gsheets import GSheetsConnection
 
-st.set_page_config(page_title="Erbario Digitale", page_icon="🌳", layout="wide")
+# --- CONFIGURAZIONE INIZIALE ---
+st.set_page_config(page_title="Erbario Digitale Online", page_icon="🌳", layout="wide")
 
-st.title("🌳 Registro Fotografico Alberi")
+# Incolla qui il link del tuo foglio Google (deve essere condiviso come EDITOR)
+URL_FOGLIO = "IL_TUO_LINK_DEL_FOGLIO_QUI"
 
-# Configurazione cartelle e file
 FILE_DATI = "Posizioni_Alberi.csv"
 CARTELLA_FOTO = "foto_alberi"
 
 if not os.path.exists(CARTELLA_FOTO):
     os.makedirs(CARTELLA_FOTO)
 
-# 1. RILEVAMENTO POSIZIONE E FOTO (Sidebar)
+# Inizializza connessione a Google Sheets
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+st.title("🌳 Registro Alberi con Google Sheets")
+
+# --- 1. RILEVAMENTO POSIZIONE (Sidebar) ---
 loc = get_geolocation()
 
 with st.sidebar:
@@ -26,59 +33,72 @@ with st.sidebar:
         st.success("📍 GPS Pronto")
         
         nome_scientifico = st.text_input("Nome Scientifico:", placeholder="Es: Quercus robur")
+        foto_file = st.camera_input("Scatta una foto")
         
-        # AGGIUNTA FOTO: attiva la fotocamera dello smartphone
-        foto_file = st.camera_input("Scatta una foto all'albero")
-        
-        if st.button("Registra Albero e Salva Foto"):
+        if st.button("Registra e Salva Online"):
             if nome_scientifico and foto_file:
-                # Creiamo un nome unico per la foto usando data e ora
+                # Gestione Foto
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 nome_foto = f"{nome_scientifico.replace(' ', '_')}_{timestamp}.jpg"
                 path_foto = os.path.join(CARTELLA_FOTO, nome_foto)
                 
-                # Salviamo la foto fisicamente sul tuo PC
                 with open(path_foto, "wb") as f:
                     f.write(foto_file.getbuffer())
                 
-                # Salviamo i dati nel CSV aggiungendo il nome della foto
+                # Prepara riga per Google Sheets
                 nuova_riga = pd.DataFrame([[nome_scientifico, lat, lon, nome_foto]], 
-                                         columns=['Specie', 'latitude', 'longitude', 'Foto'])
-                nuova_riga.to_csv(FILE_DATI, mode='a', index=False, header=not os.path.exists(FILE_DATI))
+                                         columns=['Specie', 'latitude', 'longitude', 'Foto_URL'])
                 
-                st.balloons()
-                st.rerun()
+                try:
+                    # Legge dati attuali, aggiunge il nuovo e aggiorna il foglio
+                    df_esistente = conn.read(spreadsheet=URL_FOGLIO)
+                    df_aggiornato = pd.concat([df_esistente, nuova_riga], ignore_index=True)
+                    conn.update(spreadsheet=URL_FOGLIO, data=df_aggiornato)
+                    
+                    st.balloons()
+                    st.success("✅ Salvato su Google Sheets!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Errore Google Sheets: {e}")
             else:
-                st.error("Inserisci il nome e scatta una foto!")
+                st.error("Manca il nome o la foto!")
     else:
-        st.warning("Ricerca segnale GPS...")
+        st.warning("Ricerca segnale GPS... Assicurati di aver dato i permessi al browser.")
 
-# 2. VISUALIZZAZIONE, MAPPA E GALLERIA
-if os.path.exists(FILE_DATI):
-    df = pd.read_csv(FILE_DATI)
+# --- 2. MAPPA E GALLERIA (Corpo Centrale) ---
+try:
+    # Leggiamo i dati direttamente dal foglio Google
+    df = conn.read(spreadsheet=URL_FOGLIO)
     
-    st.subheader("Mappa degli Esemplari")
-    st.map(df)
-    
-    st.divider()
-    
-    st.subheader("Galleria dell'Erbario")
-    for i, row in df.iterrows():
-        with st.container():
-            col1, col2, col3 = st.columns([0.3, 0.4, 0.3])
-            
-            # Mostra la foto salvata
-            path_foto_visualizza = os.path.join(CARTELLA_FOTO, row['Foto'])
-            if os.path.exists(path_foto_visualizza):
-                col1.image(path_foto_visualizza, width=200)
-            
-            # Dati dell'albero
-            col2.write(f"### {row['Specie']}")
-            col2.write(f"📍 {row['latitude']:.5f}, {row['longitude']:.5f}")
-            
-            # Link a Google Maps
-            g_maps_url = f"https://www.google.com/maps?q={row['latitude']},{row['longitude']}"
-            col3.markdown(f"<br><br>[📍 Naviga verso l'albero]({g_maps_url})", unsafe_allow_html=True)
-            st.divider()
-else:
-    st.info("Nessun albero nel database. Inizia a mappare!")
+    if not df.empty:
+        st.subheader("Mappa degli Esemplari Registrati")
+        # Mostra la mappa usando le colonne latitude e longitude
+        st.map(df)
+        
+        st.divider()
+        st.subheader("Galleria Fotografica")
+        
+        # Mostra i record in una griglia
+        for i, row in df.iterrows():
+            with st.container():
+                col1, col2 = st.columns([0.4, 0.6])
+                
+                # Visualizzazione foto (se presente nella cartella locale/cloud)
+                path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
+                if os.path.exists(path_img):
+                    col1.image(path_img, width=250)
+                else:
+                    col1.info("Foto non disponibile su questo dispositivo")
+                
+                col2.write(f"### {row['Specie']}")
+                col2.write(f"📍 Lat: {row['latitude']} | Lon: {row['longitude']}")
+                
+                # Link per navigare all'albero
+                g_maps = f"https://www.google.com/maps?q={row['latitude']},{row['longitude']}"
+                col2.markdown(f"[➡️ Apri in Google Maps]({g_maps})")
+                st.divider()
+    else:
+        st.info("Il database è vuoto. Registra il primo albero dalla barra laterale!")
+        
+except Exception as e:
+    st.warning("Collega il foglio Google per vedere la mappa.")
