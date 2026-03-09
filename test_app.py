@@ -13,7 +13,7 @@ CARTELLA_FOTO = "foto_alberi"
 if not os.path.exists(CARTELLA_FOTO):
     os.makedirs(CARTELLA_FOTO)
 
-conn = st.connection("gsheets", type=GSheetsConnection)
+conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
 st.title("🌳 Registro Alberi di Haldin")
 
 loc = get_geolocation()
@@ -36,10 +36,25 @@ if loc is not None and 'coords' in loc:
         if st.button("🚀 Registra e Salva Online"):
             if specie and 'last_foto' in st.session_state:
                 try:
-                    df_es = conn.read(spreadsheet=URL_FOGLIO)
-                    nuova = pd.DataFrame([{"Specie": specie, "latitude": lat, "longitude": lon, "Foto_URL": st.session_state['last_foto']}])
-                    df_up = pd.concat([df_es, nuova], ignore_index=True)
-                    conn.update(spreadsheet=URL_FOGLIO, data=df_up)
+                    # 1. Legge i dati attuali (specificando il foglio se necessario)
+                    df_esistente = conn.read(spreadsheet=URL_FOGLIO, worksheet="Foglio1")
+
+                    # 2. Crea la nuova riga
+                    nuova_riga = pd.DataFrame([{
+                    "Specie": specie,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "Foto_URL": st.session_state['last_foto']
+}])
+
+                    # 3. Unisce i dati vecchi e i nuovi, assicurandosi di non perdere nulla
+                    if df_esistente is not None and not df_esistente.empty:
+                         df_finale = pd.concat([df_esistente, nuova_riga], ignore_index=True)
+                    else:
+                         df_finale = nuova_riga
+
+                        # 4. Sovrascrive il foglio con la lista completa e aggiornata
+                         conn.update(spreadsheet=URL_FOGLIO, data=df_finale)
                     st.balloons()
                     st.rerun()
                 except Exception as e:
