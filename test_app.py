@@ -27,7 +27,6 @@ if loc is not None and 'coords' in loc:
         lon = loc['coords']['longitude']
         st.success(f"📍 GPS Pronto")
         
-        # USIAMO UN FORM: Questo "blocca" i dati finché non premi il tasto
         with st.form("modulo_inserimento", clear_on_submit=True):
             specie = st.text_input("Specie:", placeholder="Es: Quercus robur")
             foto_file = st.camera_input("Scatta una foto")
@@ -37,49 +36,52 @@ if loc is not None and 'coords' in loc:
             if submit:
                 if specie and foto_file:
                     try:
-                        # 1. Salvataggio locale della foto
+                        # 1. Foto
                         nome_f = f"foto_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
                         path_foto = os.path.join(CARTELLA_FOTO, nome_f)
                         with open(path_foto, "wb") as f:
                             f.write(foto_file.getbuffer())
                         
-                        # 2. Preparazione dati per Google
-                        nuovi_dati = [specie, lat, lon, nome_f]
+                        # 2. Leggiamo i dati attuali (fondamentale per non sovrascrivere)
+                        df_esistente = conn.read(spreadsheet=URL_FOGLIO).dropna(how='all')
                         
-                        # 3. Invio diretto (APPEND)
-                        client = conn._instance
-                        sheet = client.open_by_url(URL_FOGLIO).sheet1
-                        sheet.append_row(nuovi_dati)
+                        # 3. Creiamo la nuova riga
+                        nuova_riga = pd.DataFrame([{
+                            "Specie": specie, 
+                            "latitude": lat, 
+                            "longitude": lon, 
+                            "Foto_URL": nome_f
+                        }])
+                        
+                        # 4. Uniamo i dati: i vecchi + il nuovo
+                        df_aggiornato = pd.concat([df_esistente, nuova_riga], ignore_index=True)
+                        
+                        # 5. Salviamo tutto il blocco aggiornato
+                        conn.update(spreadsheet=URL_FOGLIO, data=df_aggiornato)
                         
                         st.balloons()
-                        st.success(f"Salvato con successo: {specie}")
-                        # Non serve rerun qui, il form si pulisce da solo
+                        st.success(f"Salvato con successo!")
                     except Exception as e:
-                        st.error(f"Errore tecnico: {e}")
+                        st.error(f"Errore durante il salvataggio: {e}")
                 else:
-                    st.error("⚠️ Errore: Devi scrivere il nome E scattare la foto!")
+                    st.warning("⚠️ Scrivi il nome e scatta la foto!")
 else:
-    st.warning("Ricerca GPS in corso... Assicurati di aver dato i permessi di posizione.")
+    st.warning("Ricerca GPS in corso... Attiva la posizione sul telefono.")
 
-# --- VISUALIZZAZIONE DATI (HOME) ---
+# --- VISUALIZZAZIONE ---
 st.divider()
 try:
-    # Leggiamo i dati per la mappa e la lista (senza cache per vedere subito l'aggiornamento)
-    df = conn.read(spreadsheet=URL_FOGLIO, ttl=0).dropna(how='all')
-    if not df.empty:
-        col_mappa, col_lista = st.columns([0.6, 0.4])
+    df_visualizza = conn.read(spreadsheet=URL_FOGLIO, ttl=0).dropna(how='all')
+    if not df_visualizza.empty:
+        st.subheader("Mappa dei ritrovamenti")
+        st.map(df_visualizza)
         
-        with col_mappa:
-            st.subheader("Mappa")
-            st.map(df)
-            
-        with col_lista:
-            st.subheader("Archivio")
-            for i, row in df.iloc[::-1].iterrows():
-                with st.expander(f"🌳 {row['Specie']}"):
-                    path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
-                    if os.path.exists(path_img):
-                        st.image(path_img, width=200)
-                    st.write(f"Posizione: {row['latitude']}, {row['longitude']}")
+        st.subheader("Archivio")
+        for i, row in df_visualizza.iloc[::-1].iterrows():
+            with st.expander(f"🌳 {row['Specie']}"):
+                path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
+                if os.path.exists(path_img):
+                    st.image(path_img, width=250)
+                st.write(f"Posizione: {row['latitude']}, {row['longitude']}")
 except:
-    st.info("Inizia a mappare i tuoi alberi!")
+    st.info("Nessun dato ancora presente.")
