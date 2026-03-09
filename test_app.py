@@ -9,7 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Erbario Digitale Online", page_icon="🌳", layout="wide")
 
 # Incolla qui il link del tuo foglio Google (deve essere condiviso come EDITOR)
-URL_FOGLIO = "Ihttps://docs.google.com/spreadsheets/d/1NP6G6MGH2NTXlEJ8MsR0f5RsLW_oxYZRCpBj6NsUG6w/edit?gid=0#gid=0"
+URL_FOGLIO = "https://docs.google.com/spreadsheets/d/1NP6G6MGH2NTXlEJ8MsR0f5RsLW_oxYZRCpBj6NsUG6w/edit"
 
 FILE_DATI = "Posizioni_Alberi.csv"
 CARTELLA_FOTO = "foto_alberi"
