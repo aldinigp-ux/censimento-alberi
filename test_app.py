@@ -25,7 +25,7 @@ except:
     totale = 0
     df_raw = pd.DataFrame()
 
-# Titolo e Contatore sulla stessa riga
+# Intestazione compatta
 st.markdown(f"""
     <div style='display: flex; align-items: baseline;'>
         <h6 style='margin: 0; padding-right: 8px;'>🌳 Registro Haldin</h6>
@@ -45,11 +45,10 @@ if loc is not None and 'coords' in loc:
         st.success("📍 GPS Pronto")
         
         with st.form("modulo_inserimento", clear_on_submit=True):
-            specie = st.text_input("Specie (Genere e Specie):", placeholder="Es: Quercus robur")
-            stato = st.selectbox("Stato dell'albero:", 
-                                ["🟢 Ottimo", "🟡 Da monitorare", "🔴 Malato/Danneggiato", "⚪ Solo tronco"])
+            specie = st.text_input("Specie:", placeholder="Es: Quercus robur")
+            stato = st.selectbox("Stato:", ["🟢 Ottimo", "🟡 Da monitorare", "🔴 Malato/Danneggiato", "⚪ Solo tronco"])
             foto_file = st.camera_input("Scatta una foto")
-            submit = st.form_submit_button("🚀 Registra e Salva")
+            submit = st.form_submit_button("🚀 Registra")
             
             if submit:
                 if specie and foto_file:
@@ -72,13 +71,13 @@ if loc is not None and 'coords' in loc:
                     except Exception as e:
                         st.error(f"Errore: {e}")
                 else:
-                    st.warning("⚠️ Manca specie o foto!")
+                    st.warning("⚠️ Compila tutto!")
 else:
     st.info("Attivare il GPS per inserire nuovi alberi.")
 
 # --- CORPO CENTRALE: FILTRI E MAPPA ---
 if not df_raw.empty:
-    ricerca = st.text_input("", placeholder="🔍 Cerca specie o stato...", label_visibility="collapsed").strip().lower()
+    ricerca = st.text_input("", placeholder="🔍 Cerca...", label_visibility="collapsed").strip().lower()
     
     if ricerca:
         df_visualizza = df_raw[df_raw['Specie'].str.lower().str.contains(ricerca) | 
@@ -89,13 +88,7 @@ if not df_raw.empty:
     tab_mappa, tab_lista = st.tabs(["📍 Mappa", "📜 Lista"])
 
     with tab_mappa:
-        # Configurazione del fumetto (Tooltip)
-        tooltip = {
-            "html": "<b>Albero:</b> {Specie}<br/><b>Stato:</b> {Stato}",
-            "style": {"backgroundColor": "#2e7d32", "color": "white", "fontSize": "12px"}
-        }
-
-        # Strato dei punti
+        # Mappa Interattiva Pydeck
         layer = pdk.Layer(
             "ScatterplotLayer",
             df_visualizza,
@@ -105,5 +98,26 @@ if not df_raw.empty:
             pickable=True,
         )
 
-        # Visualizzazione Mappa Interattiva
-        st.pydeck_chart(p
+        view_state = pdk.ViewState(
+            latitude=df_visualizza['latitude'].mean() if not df_visualizza.empty else 0,
+            longitude=df_visualizza['longitude'].mean() if not df_visualizza.empty else 0,
+            zoom=16,
+        )
+
+        st.pydeck_chart(pdk.Deck(
+            layers=[layer],
+            initial_view_state=view_state,
+            map_style='mapbox://styles/mapbox/light-v9',
+            tooltip={"html": "<b>{Specie}</b><br>{Stato}", "style": {"color": "white", "backgroundColor": "#2e7d32"}}
+        ))
+        
+    with tab_lista:
+        for i, row in df_visualizza.iloc[::-1].iterrows():
+            with st.expander(f"🌳 {row['Specie']}"):
+                path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
+                if os.path.exists(path_img):
+                    st.image(path_img, use_container_width=True)
+                st.write(f"**Stato:** {row['Stato']}")
+                st.caption(f"Coordinate: {row['latitude']}, {row['longitude']}")
+else:
+    st.info("L'erbario è vuoto.")
