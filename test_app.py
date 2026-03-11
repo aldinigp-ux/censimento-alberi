@@ -4,6 +4,7 @@ import pandas as pd
 import os
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
+import pydeck as pdk
 
 # --- CONFIGURAZIONE ---
 st.set_page_config(page_title="Erbario Digitale Haldin", page_icon="🌳", layout="wide")
@@ -24,7 +25,7 @@ except:
     totale = 0
     df_raw = pd.DataFrame()
 
-# Titolo e Contatore sulla stessa riga (molto piccolo per il cellulare)
+# Titolo e Contatore sulla stessa riga
 st.markdown(f"""
     <div style='display: flex; align-items: baseline;'>
         <h6 style='margin: 0; padding-right: 8px;'>🌳 Registro Haldin</h6>
@@ -77,7 +78,6 @@ else:
 
 # --- CORPO CENTRALE: FILTRI E MAPPA ---
 if not df_raw.empty:
-    # Barra di ricerca compatta (senza etichetta sopra)
     ricerca = st.text_input("", placeholder="🔍 Cerca specie o stato...", label_visibility="collapsed").strip().lower()
     
     if ricerca:
@@ -86,20 +86,24 @@ if not df_raw.empty:
     else:
         df_visualizza = df_raw
 
-    # Schede per ottimizzare il display del telefono
     tab_mappa, tab_lista = st.tabs(["📍 Mappa", "📜 Lista"])
 
     with tab_mappa:
-        # Mostriamo la mappa (usa i dati filtrati)
-        st.map(df_visualizza, size=20, color="#2e7d32")
-        
-    with tab_lista:
-        for i, row in df_visualizza.iloc[::-1].iterrows():
-            with st.expander(f"🌳 {row['Specie']}"):
-                path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
-                if os.path.exists(path_img):
-                    st.image(path_img, use_container_width=True)
-                st.write(f"**Stato:** {row['Stato']}")
-                st.caption(f"Coordinate: {row['latitude']}, {row['longitude']}")
-else:
-    st.info("L'erbario è vuoto.")
+        # Configurazione del fumetto (Tooltip)
+        tooltip = {
+            "html": "<b>Albero:</b> {Specie}<br/><b>Stato:</b> {Stato}",
+            "style": {"backgroundColor": "#2e7d32", "color": "white", "fontSize": "12px"}
+        }
+
+        # Strato dei punti
+        layer = pdk.Layer(
+            "ScatterplotLayer",
+            df_visualizza,
+            get_position='[longitude, latitude]',
+            get_color='[46, 125, 50, 160]',
+            get_radius=15,
+            pickable=True,
+        )
+
+        # Visualizzazione Mappa Interattiva
+        st.pydeck_chart(p
