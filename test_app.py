@@ -15,7 +15,7 @@ if not os.path.exists(CARTELLA_FOTO):
     os.makedirs(CARTELLA_FOTO)
 
 conn = st.connection("gsheets", type=GSheetsConnection, ttl=0)
-st.title("🌳 Registro Alberi di Haldin")
+st.markdown("### 🌳 Registro Alberi di Haldin")
 
 loc = get_geolocation()
 
