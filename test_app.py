@@ -77,8 +77,10 @@ else:
 
 # --- CORPO CENTRALE: FILTRI E MAPPA ---
 if not df_raw.empty:
-    ricerca = st.text_input("", placeholder="🔍 Cerca...", label_visibility="collapsed").strip().lower()
+    # Casella di ricerca
+    ricerca = st.text_input("", placeholder="🔍 Cerca specie o stato...", label_visibility="collapsed").strip().lower()
     
+    # LOGICA DI FILTRO: Se ricerca è vuota, usa df_raw (tutti gli alberi)
     if ricerca:
         df_visualizza = df_raw[df_raw['Specie'].str.lower().str.contains(ricerca) | 
                                df_raw['Stato'].str.lower().str.contains(ricerca)]
@@ -88,28 +90,35 @@ if not df_raw.empty:
     tab_mappa, tab_lista = st.tabs(["📍 Mappa", "📜 Lista"])
 
     with tab_mappa:
-        # Mappa Interattiva Pydeck
-        layer = pdk.Layer(
-            "ScatterplotLayer",
-            df_visualizza,
-            get_position='[longitude, latitude]',
-            get_color='[46, 125, 50, 160]',
-            get_radius=15,
-            pickable=True,
-        )
+        # Se non ci sono risultati per la ricerca, mostriamo un avviso
+        if df_visualizza.empty:
+            st.warning("Nessun albero trovato con questo nome.")
+        else:
+            # Creazione Layer Punti
+            layer = pdk.Layer(
+                "ScatterplotLayer",
+                df_visualizza,
+                get_position='[longitude, latitude]',
+                get_color='[46, 125, 50, 200]',
+                get_radius=12,
+                pickable=True,
+            )
 
-        view_state = pdk.ViewState(
-            latitude=df_visualizza['latitude'].mean() if not df_visualizza.empty else 0,
-            longitude=df_visualizza['longitude'].mean() if not df_visualizza.empty else 0,
-            zoom=16,
-        )
+            # Vista centrata sui dati correnti
+            view_state = pdk.ViewState(
+                latitude=df_visualizza['latitude'].mean(),
+                longitude=df_visualizza['longitude'].mean(),
+                zoom=16,
+                pitch=0
+            )
 
-        st.pydeck_chart(pdk.Deck(
-            layers=[layer],
-            initial_view_state=view_state,
-            map_style='mapbox://styles/mapbox/light-v9',
-            tooltip={"html": "<b>{Specie}</b><br>{Stato}", "style": {"color": "white", "backgroundColor": "#2e7d32"}}
-        ))
+            # Rendering Mappa
+            st.pydeck_chart(pdk.Deck(
+                layers=[layer],
+                initial_view_state=view_state,
+                map_style='mapbox://styles/mapbox/light-v9',
+                tooltip={"html": "<b>{Specie}</b><br>{Stato}", "style": {"color": "white", "backgroundColor": "#2e7d32"}}
+            ))
         
     with tab_lista:
         for i, row in df_visualizza.iloc[::-1].iterrows():
