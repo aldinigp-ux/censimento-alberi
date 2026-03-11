@@ -73,41 +73,34 @@ try:
     df_raw = conn.read(spreadsheet=URL_FOGLIO, ttl=0).dropna(how='all')
     
     if not df_raw.empty:
-        # 1. Contatore
-        totale_alberi = len(df_raw)
-        st.metric("Alberi censiti nell'Erbario", totale_alberi)
+        # 1. Contatore e Ricerca (sempre visibili)
+        st.metric("Alberi nell'Erbario", len(df_raw))
         
-        # 2. Ricerca Intelligente
-        st.subheader("🔍 Cerca nel Registro")
-        ricerca = st.text_input("Filtra per nome (es: 'Quercus' o 'Pino'):", "").strip().lower()
+        ricerca = st.text_input("🔍 Filtra per nome o stato:", "").strip().lower()
         
-        # Applichiamo il filtro se l'utente scrive qualcosa
         if ricerca:
-            df_visualizza = df_raw[df_raw['Specie'].str.lower().str.contains(ricerca)]
+            df_visualizza = df_raw[df_raw['Specie'].str.lower().str.contains(ricerca) | 
+                                   df_raw['Stato'].str.lower().str.contains(ricerca)]
         else:
             df_visualizza = df_raw
 
-        # 3. Mappa Interattiva
-        # Aggiungiamo una colonna per le etichette sulla mappa
-        df_visualizza['Etichetta'] = df_visualizza['Specie'] + " (" + df_visualizza['Stato'] + ")"
-        
-        col_map, col_list = st.columns([0.6, 0.4])
-        
-        with col_map:
-            st.subheader("📍 Mappa dei ritrovamenti")
-            # Visualizza i punti filtrati con tooltip
+        # 2. CREAZIONE DELLE SCHEDE (TABS) per salvare spazio sul telefono
+        tab_mappa, tab_lista = st.tabs(["📍 Mappa Grande", "📜 Lista Dettagliata"])
+
+        with tab_mappa:
+            # Etichetta per la mappa
+            df_visualizza['Etichetta'] = df_visualizza['Specie'] + " (" + df_visualizza['Stato'] + ")"
             st.map(df_visualizza, size=20, color="#2e7d32")
             
-        with col_list:
-            st.subheader("📜 Dettagli")
+        with tab_lista:
             for i, row in df_visualizza.iloc[::-1].iterrows():
                 with st.expander(f"🌳 {row['Specie']}"):
                     path_img = os.path.join(CARTELLA_FOTO, str(row['Foto_URL']))
                     if os.path.exists(path_img):
-                        st.image(path_img, width=250)
+                        st.image(path_img, use_container_width=True) # Foto larga quanto il telefono
                     st.write(f"**Stato:** {row['Stato']}")
-                    st.write(f"**Coordinate:** {row['latitude']}, {row['longitude']}")
+                    st.caption(f"Coordinate: {row['latitude']}, {row['longitude']}")
     else:
-        st.info("L'erbario è ancora vuoto. Registra il tuo primo albero dalla barra laterale!")
+        st.info("L'erbario è vuoto. Registra il tuo primo albero!")
 except Exception as e:
-    st.info("In attesa di dati dal foglio Google...")
+    st.error(f"Errore visualizzazione: {e}")
