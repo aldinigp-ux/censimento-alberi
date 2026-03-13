@@ -6,6 +6,13 @@ from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 import pydeck as pdk
 
+# Questa deve essere la PRIMISSIMA istruzione di Streamlit nel codice (per l'icona)
+st.set_page_config(
+    page_title="Censimento Alberi",
+    page_icon="https://raw.githubusercontent.com/aldinigp-ux/censimento-alberi/main/icona.png",
+    layout="centered"
+)
+
 # --- CONFIGURAZIONE ---
 st.set_page_config(page_title="Erbario Digitale Haldin", page_icon="🌳", layout="wide")
 
